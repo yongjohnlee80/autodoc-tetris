@@ -8,10 +8,12 @@ import (
 	"github.com/yongjohnlee80/autodoc-tetris/game"
 )
 
-// The dialog: the board, two columns a cell, between its walls, and the panel beside it.
+// The dialog: a column of margin, the board, two columns a cell, between its walls, and the panel
+// beside it. The margin keeps the board's wall off the dialog's border.
 const (
+	left   = 1
 	boardW = game.Width*2 + 2 // the cells and the two walls
-	panelX = boardW + 2
+	panelX = left + boardW + 2
 	needW  = panelX + 18
 	needH  = game.Height + 1 // the rows and the floor
 )
@@ -57,15 +59,15 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
 		return f
 	}
 	for y := range game.Height {
-		f.Set(0, y, '│', pal.wall)
-		f.Set(boardW-1, y, '│', pal.wall)
+		f.Set(left, y, '│', pal.wall)
+		f.Set(left+boardW-1, y, '│', pal.wall)
 		for x := range game.Width {
 			if k := g.Board[y+game.Hidden][x]; k != 0 {
 				block(f, x, y, "██", pal.piece[k])
 			}
 		}
 	}
-	f.Text(0, game.Height, "└"+repeat('─', boardW-2)+"┘", pal.wall)
+	f.Text(left, game.Height, "└"+repeat('─', boardW-2)+"┘", pal.wall)
 	if !g.Over {
 		for _, c := range g.Ghost().Cells() {
 			if y := c[1] - game.Hidden; y >= 0 {
@@ -106,12 +108,12 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
 }
 
 // block draws board cell (x, y) as two characters.
-func block(f *plugin.Frame, x, y int, s string, st plugin.Style) { f.Text(1+x*2, y, s, st) }
+func block(f *plugin.Frame, x, y int, s string, st plugin.Style) { f.Text(left+1+x*2, y, s, st) }
 
 // centre writes s centred over the board, on row y.
 func centre(f *plugin.Frame, y int, s string, st plugin.Style) {
 	n := len([]rune(s))
-	f.Text((boardW-n)/2, y, s, st)
+	f.Text(left+(boardW-n)/2, y, s, st)
 }
 
 func repeat(r rune, n int) string {

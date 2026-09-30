@@ -52,7 +52,7 @@ in the plugin's directory, since that is a git clone an update resets.
 ## How it is made
 
 - `plugin.toml` is the manifest AutoDoc reads. It declares a dialog plugin of plugin protocol 1, the
-  dialog's size (42×21), the `command` it starts, and the `[install] build` that adding it runs.
+  dialog's size (44×21), the `command` it starts, and the `[install] build` that adding it runs.
 - `game/` is the game, with no screen in it, tested with a seed.
 - `render.go` draws a game into a `plugin.Frame`. The colours are in the themes' vocabulary (`"cyan"`,
   `"#ff8700"`). In the mono theme every piece is bright white, and the ghost tells them from the floor.
