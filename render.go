@@ -34,12 +34,17 @@ type palette struct {
 	ghost plugin.Style
 	text  plugin.Style
 	title plugin.Style
+	name  plugin.Style // the title: the theme's accent (its cursor's colour), bold
 }
+
+// titleLines are the game's title: it is 갈렙 and 엘리아's (Johno's son and daughter), "Caleb and
+// Elia's Tetris".
+var titleLines = []string{"갈렙과 엘리아", "테트리스"}
 
 func paletteFor(t plugin.Theme) palette {
 	dim := t.Colors["document.lineNumber"]
 	p := palette{piece: map[game.Kind]plugin.Style{}, wall: plugin.Style{FG: dim}, ghost: plugin.Style{FG: dim},
-		title: plugin.Style{Bold: true}}
+		title: plugin.Style{Bold: true}, name: plugin.Style{FG: t.Colors["document.cursor"], Bold: true}}
 	for k, c := range pieceColors {
 		if t.Name == "mono" {
 			c = "brightwhite"
@@ -105,21 +110,27 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int, step int) *plugin.
 		}
 	}
 
-	f.Text(panelX, top, "NEXT", pal.title)
+	// whose game it is, at the top of the panel: Hangul is two columns a letter, so the title takes
+	// two lines of the panel's 19 (the frame holds a letter in one cell, and the host draws it two
+	// wide; at the row's end that pushes only its blanks)
+	for i, line := range titleLines {
+		f.Text(panelX, top+i, line, pal.name)
+	}
+	f.Text(panelX, top+3, "NEXT", pal.title)
 	next := game.Piece{Kind: g.Next}
 	for _, c := range next.Cells() {
-		f.Text(panelX+c[0]*2, top+1+c[1], "██", pal.piece[g.Next])
+		f.Text(panelX+c[0]*2, top+4+c[1], "██", pal.piece[g.Next])
 	}
 	for i, row := range [][2]string{
 		{"SCORE", fmt.Sprint(g.Score)}, {"LEVEL", fmt.Sprint(g.Level)},
 		{"LINES", fmt.Sprint(g.Lines)}, {"BEST", fmt.Sprint(max(best, g.Score))},
 	} {
-		f.Text(panelX, top+4+i*2, row[0], pal.title)
-		f.Text(panelX, top+5+i*2, row[1], pal.text)
+		f.Text(panelX, top+7+i, row[0], pal.title)
+		f.Text(panelX+7, top+7+i, row[1], pal.text)
 	}
 	for i, k := range []string{"←→   move", "↑ x  rotate", "z    rotate back", "↓    soft drop",
 		"Spc  hard drop", "p q  menu", "Esc  hide"} {
-		f.Text(panelX, top+13+i, k, pal.wall)
+		f.Text(panelX, top+12+i, k, pal.wall)
 	}
 	// the game's menu: over the board while paused, and when lost
 	switch {

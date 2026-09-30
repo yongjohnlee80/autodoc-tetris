@@ -41,14 +41,12 @@ func styleAt(f *plugin.Frame, x, y int) plugin.Style {
 	return plugin.Style{}
 }
 
-// scoreOf reads the panel's score: the last field of the row under SCORE.
+// scoreOf reads the panel's score: the number after SCORE, on its row.
 func scoreOf(frame string) int {
-	lines := strings.Split(frame, "\n")
-	for i, l := range lines {
-		if strings.Contains(l, "SCORE") && i+1 < len(lines) {
-			f := strings.Fields(lines[i+1])
-			if len(f) > 0 {
-				n, _ := strconv.Atoi(f[len(f)-1])
+	for _, l := range strings.Split(frame, "\n") {
+		if _, after, ok := strings.Cut(l, "SCORE"); ok {
+			if f := strings.Fields(after); len(f) > 0 {
+				n, _ := strconv.Atoi(f[0])
 				return n
 			}
 		}
@@ -56,7 +54,33 @@ func scoreOf(frame string) int {
 	return -1
 }
 
-var dark = plugin.Theme{Name: "dark", Colors: map[string]string{"document.lineNumber": "#5f5f5f"}}
+var dark = plugin.Theme{Name: "dark", Colors: map[string]string{"document.lineNumber": "#5f5f5f", "document.cursor": "#ffaf00"}}
+
+// TestTheGameIsCalebAndEliasTetris: the title, 갈렙과 엘리아 테트리스, at the top of the panel, in
+// the theme's accent, bold, above the next piece and the scores.
+func TestTheGameIsCalebAndEliasTetris(t *testing.T) {
+	g := game.New(1, game.MinHeight)
+	f := render(g, needW, needH, dark, 0, 0)
+	rows := strings.Split(text(f), "\n")
+	if !strings.Contains(rows[0], "갈렙과 엘리아") || !strings.Contains(rows[1], "테트리스") {
+		t.Fatalf("the title is not at the top of the panel:\n%s", text(f))
+	}
+	if st := styleAt(f, panelX, 0); st.FG != "#ffaf00" || !st.Bold {
+		t.Errorf("the title's look: %+v", st)
+	}
+	next, score := -1, -1
+	for i, r := range rows {
+		if strings.Contains(r, "NEXT") && next < 0 {
+			next = i
+		}
+		if strings.Contains(r, "SCORE") && score < 0 {
+			score = i
+		}
+	}
+	if next <= 1 || score <= next {
+		t.Errorf("NEXT at row %d, SCORE at %d: the title first, then the next piece, then the scores", next, score)
+	}
+}
 
 // TestTheFrameIsTheBoardThePieceItsGhostAndThePanel: the walls and floor, the falling piece in its
 // colour, its ghost at the bottom, the next piece and the counts.
@@ -126,7 +150,7 @@ func TestTheWellFillsATallDialog(t *testing.T) {
 			floor = i
 		}
 	}
-	if floor != h-1 || !strings.Contains(rows[0], "NEXT") || g.Height != h-1 {
+	if floor != h-1 || !strings.Contains(rows[3], "NEXT") || g.Height != h-1 {
 		t.Fatalf("the floor at row %d (want %d), the well %d rows:\n%s", floor, h-1, g.Height, strings.Join(rows, "\n"))
 	}
 	if s := text(render(g, needW, needH, dark, 0, 0)); !strings.Contains(s, fmt.Sprintf("%d×%d", needW, h)) || !strings.Contains(s, "paused") {
