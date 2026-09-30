@@ -69,13 +69,13 @@ func TestTheFrameIsTheBoardThePieceItsGhostAndThePanel(t *testing.T) {
 			t.Errorf("the frame lacks %q:\n%s", want, s)
 		}
 	}
-	// T's nub at board column 4, row 0: screen column 1+4*2
-	if st := styleAt(f, 9, 0); st.FG != "magenta" {
+	// T's nub at board column 4, row 0: past the margin and the wall, screen column 2+4*2
+	if st := styleAt(f, 10, 0); st.FG != "magenta" {
 		t.Errorf("T's cell is %+v, want magenta:\n%s", st, s)
 	}
 	ghost := g.Ghost()
 	gx, gy := ghost.Cells()[0][0], ghost.Cells()[0][1]-game.Hidden
-	if st := styleAt(f, 1+gx*2, gy); st.FG != "#5f5f5f" || !strings.Contains(strings.Split(s, "\n")[gy], "░░") {
+	if st := styleAt(f, 2+gx*2, gy); st.FG != "#5f5f5f" || !strings.Contains(strings.Split(s, "\n")[gy], "░░") {
 		t.Errorf("the ghost at (%d, %d) is %+v:\n%s", gx, gy, st, s)
 	}
 }

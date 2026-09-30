@@ -8,7 +8,7 @@ protocol = 1
 command  = ["./bin/autodoc-tetris"]
 
 [dialog]
-width  = 42
+width  = 44
 height = 21
 
 [install]
