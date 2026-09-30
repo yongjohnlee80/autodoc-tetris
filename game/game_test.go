@@ -20,15 +20,15 @@ func cellsOf(p Piece) [][2]int {
 
 // empty is a game on an empty board with piece k, rotation 0, at its spawn.
 func empty(k Kind) *Game {
-	g := New(1)
-	g.Board = [Rows][Width]Kind{}
+	g := New(1, MinHeight)
+	g.Board = make([][Width]Kind, MinHeight+Hidden)
 	g.Cur = Piece{Kind: k, X: 3}
 	return g
 }
 
 // TestTheBagDealsEachPieceOnceInSeven: every seven pieces are the seven kinds.
 func TestTheBagDealsEachPieceOnceInSeven(t *testing.T) {
-	g := New(42)
+	g := New(42, MinHeight)
 	g.bag = nil // New dealt two: start at a bag's edge
 	for bag := range 4 {
 		seen := map[Kind]int{}
@@ -137,20 +137,20 @@ func TestMovesStopAtTheWallsAndTheStack(t *testing.T) {
 func TestLinesClearAndScoreByTheGuideline(t *testing.T) {
 	g := empty(I)
 	for x := 1; x < Width; x++ {
-		for y := Rows - 4; y < Rows; y++ {
+		for y := g.Rows() - 4; y < g.Rows(); y++ {
 			g.Board[y][x] = J
 		}
 	}
-	g.Board[Rows-5][5] = S // above the four rows: falls four
+	g.Board[g.Rows()-5][5] = S // above the four rows: falls four
 	g.Cur = Piece{Kind: I, Rot: 1, X: -2, Y: 0}
 	n := g.HardDrop()
 	if g.Lines != 4 || g.Score != 800+2*n {
 		t.Fatalf("a tetris: %d lines, score %d, want 4 and %d", g.Lines, g.Score, 800+2*n)
 	}
-	if g.Board[Rows-1][5] != S {
-		t.Errorf("the cell above the cleared rows did not fall: %v", g.Board[Rows-1])
+	if g.Board[g.Rows()-1][5] != S {
+		t.Errorf("the cell above the cleared rows did not fall: %v", g.Board[g.Rows()-1])
 	}
-	for y := range Rows - 1 {
+	for y := range g.Rows() - 1 {
 		for x := range Width {
 			if g.Board[y][x] != 0 {
 				t.Fatalf("row %d not empty after the clear: %v", y, g.Board[y])
@@ -161,7 +161,7 @@ func TestLinesClearAndScoreByTheGuideline(t *testing.T) {
 	g = empty(I)
 	g.Lines, g.Level = 9, 1
 	for x := 4; x < Width; x++ {
-		g.Board[Rows-1][x] = Z
+		g.Board[g.Rows()-1][x] = Z
 	}
 	g.Cur = Piece{Kind: I, X: 0, Y: 0}
 	fell := g.HardDrop()
@@ -196,10 +196,10 @@ func TestDropsScoreAndTheGhostIsWhereItLands(t *testing.T) {
 // bottom; a blocked spawn is the game over, after which nothing moves.
 func TestGravityLocksAndTheGameEndsWhenAPieceCannotSpawn(t *testing.T) {
 	g := empty(O)
-	for range Rows {
+	for range g.Rows() {
 		g.Tick()
 	}
-	if g.Board[Rows-1][4] != O {
+	if g.Board[g.Rows()-1][4] != O {
 		t.Fatal("gravity did not lock O at the bottom")
 	}
 	for x := range Width {
@@ -256,5 +256,49 @@ func TestGravityQuickensByLevel(t *testing.T) {
 	}
 	if I.String() != "I" || L.String() != "L" {
 		t.Error("Kind.String")
+	}
+}
+
+// TestATallerWellLetsThePiecesFallFurther: a game taller than the guideline's 20 rows drops a piece
+// its whole height; below 20 it is 20.
+func TestATallerWellLetsThePiecesFallFurther(t *testing.T) {
+	g := New(1, 36)
+	g.Board = make([][Width]Kind, 36+Hidden)
+	g.Cur = Piece{Kind: O, X: 3}
+	if fell := g.HardDrop(); fell != 36 {
+		t.Fatalf("O fell %d rows in a 36-row well, want 36", fell)
+	}
+	if g.Board[g.Rows()-1][4] != O || g.Height != 36 || g.Rows() != 38 {
+		t.Fatalf("the well: height %d, rows %d", g.Height, g.Rows())
+	}
+	if New(1, 12).Height != MinHeight {
+		t.Error("a well shorter than the guideline's")
+	}
+}
+
+// TestResizeKeepsTheStackWhereItLies: growing adds empty rows on top, the stack and the piece where
+// they were; shrinking drops only empty top rows, and stops at the stack.
+func TestResizeKeepsTheStackWhereItLies(t *testing.T) {
+	g := New(1, MinHeight)
+	g.Board = make([][Width]Kind, MinHeight+Hidden)
+	g.Board[g.Rows()-1][0] = J
+	g.Cur = Piece{Kind: T, X: 3, Y: 5}
+	cells := g.Cur.Cells()
+	if !g.Resize(30) || g.Height != 30 || g.Board[g.Rows()-1][0] != J {
+		t.Fatalf("grown: height %d, bottom %v", g.Height, g.Board[g.Rows()-1])
+	}
+	for i, c := range g.Cur.Cells() {
+		if c[1] != cells[i][1]+10 || c[0] != cells[i][0] {
+			t.Fatalf("the piece moved in the well: %v, was %v", g.Cur.Cells(), cells)
+		}
+	}
+	if !g.Resize(22) || g.Height != 22 || g.Board[g.Rows()-1][0] != J {
+		t.Fatalf("shrunk: height %d", g.Height)
+	}
+	for x := range Width {
+		g.Board[0][x] = S // the stack reaches the top: nothing more can go
+	}
+	if g.Resize(MinHeight) || g.Height != 22 {
+		t.Fatalf("a shrink through the stack: height %d", g.Height)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,7 +60,7 @@ var dark = plugin.Theme{Name: "dark", Colors: map[string]string{"document.lineNu
 // TestTheFrameIsTheBoardThePieceItsGhostAndThePanel: the walls and floor, the falling piece in its
 // colour, its ghost at the bottom, the next piece and the counts.
 func TestTheFrameIsTheBoardThePieceItsGhostAndThePanel(t *testing.T) {
-	g := game.New(7)
+	g := game.New(7, game.MinHeight)
 	g.Cur = game.Piece{Kind: game.T, X: 3, Y: game.Hidden}
 	g.Score, g.Level, g.Lines = 1234, 3, 21
 	f := render(g, needW, needH, dark, 5000)
@@ -95,25 +96,47 @@ func TestMonoDrawsEveryPieceBrightWhite(t *testing.T) {
 
 // TestASmallWindowSaysWhatItNeeds, and pause and game over say so over the board.
 func TestASmallWindowSaysWhatItNeeds(t *testing.T) {
-	g := game.New(1)
+	g := game.New(1, game.MinHeight)
 	if s := text(render(g, 30, 10, dark, 0)); !strings.Contains(s, "Tetris needs a window") {
 		t.Errorf("a small window:\n%s", s)
 	}
 	g.TogglePause()
-	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "PAUSED") {
-		t.Errorf("paused:\n%s", s)
+	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "PAUSED") ||
+		!strings.Contains(s, "p  resume") || !strings.Contains(s, "n  new game") || !strings.Contains(s, "q  quit") {
+		t.Errorf("paused, the game's menu:\n%s", s)
 	}
 	g.TogglePause()
 	g.Over = true
-	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "GAME OVER") || !strings.Contains(s, "Enter: again") {
+	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "GAME OVER") || !strings.Contains(s, "n  new game") {
 		t.Errorf("over:\n%s", s)
+	}
+}
+
+// TestTheWellFillsATallDialog: in a dialog taller than the guideline's board (80% of the screen),
+// the well is as tall as the dialog, so the pieces fall the whole way; the panel sits at its top;
+// a game taller than its window says so.
+func TestTheWellFillsATallDialog(t *testing.T) {
+	h := needH + 10
+	g := game.New(1, wells(h))
+	rows := strings.Split(text(render(g, needW, h, dark, 0)), "\n")
+	floor := -1
+	for i, r := range rows {
+		if strings.Contains(r, "└──") {
+			floor = i
+		}
+	}
+	if floor != h-1 || !strings.Contains(rows[0], "NEXT") || g.Height != h-1 {
+		t.Fatalf("the floor at row %d (want %d), the well %d rows:\n%s", floor, h-1, g.Height, strings.Join(rows, "\n"))
+	}
+	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, fmt.Sprintf("%d×%d", needW, h)) || !strings.Contains(s, "paused") {
+		t.Errorf("a %d-row game in a %d-row window:\n%s", g.Height, needH, s)
 	}
 }
 
 // TestTheKeysPlayTheGame: the arrows and Vim's keys move and turn, Space drops, p pauses, q quits,
 // Enter restarts only a lost game, and a key that changes nothing says so.
 func TestTheKeysPlayTheGame(t *testing.T) {
-	g := game.New(3)
+	g := game.New(3, game.MinHeight)
 	g.Cur = game.Piece{Kind: game.T, X: 3, Y: 5}
 	steps := []struct {
 		key  string
@@ -131,16 +154,22 @@ func TestTheKeysPlayTheGame(t *testing.T) {
 		{"Left", nothing, func() bool { return g.Cur.X == 3 }},
 		{"p", changed, func() bool { return !g.Paused }},
 		{" ", changed, func() bool { return g.Score > 0 && g.Cur.Y < 5 }},
-		{"q", quit, func() bool { return true }},
+		{"q", changed, func() bool { return g.Paused }}, // q in play is the menu, not the end
+		{"x", nothing, func() bool { return g.Paused }},
+		{"q", quit, func() bool { return true }}, // the menu's quit
 	}
 	for i, s := range steps {
 		if got := apply(g, plugin.Key{Key: s.key}); got != s.want || !s.ok() {
 			t.Fatalf("step %d, %q: %v (want %v), state %+v", i, s.key, got, s.want, g.Cur)
 		}
 	}
+	if apply(g, plugin.Key{Key: "n"}) != restart {
+		t.Error("the menu's n does not start a new game")
+	}
 	g.Over = true
-	if apply(g, plugin.Key{Key: "Enter"}) != restart {
-		t.Error("Enter on a lost game does not restart it")
+	if apply(g, plugin.Key{Key: "Enter"}) != restart || apply(g, plugin.Key{Key: "n"}) != restart ||
+		apply(g, plugin.Key{Key: "q"}) != quit || apply(g, plugin.Key{Key: "Left"}) != nothing {
+		t.Error("a lost game's menu: Enter and n again, q quits, the rest nothing")
 	}
 }
 
@@ -203,7 +232,10 @@ func TestThePluginSpeaksTheProtocol(t *testing.T) {
 	wait(func(s string) bool { return s == plugin.MethodReady })
 	wait(func(s string) bool { return strings.Contains(s, "NEXT") && strings.Contains(s, "SCORE") })
 	_ = link.Notify(ctx, plugin.MethodKey, plugin.KeyParams(plugin.Key{Key: " ", Text: " "}))
-	wait(func(s string) bool { return scoreOf(s) > 0 }) // a hard drop scores 2 a row
+	wait(func(s string) bool { return scoreOf(s) > 0 })           // a hard drop scores 2 a row
+	_ = link.Notify(ctx, plugin.MethodHide, plugin.EmptyParams()) // Esc, in AutoDoc: the game pauses
+	wait(func(s string) bool { return strings.Contains(s, "PAUSED") && strings.Contains(s, "q  quit") })
+	_ = link.Notify(ctx, plugin.MethodShow, plugin.EmptyParams())
 	_ = link.Notify(ctx, plugin.MethodClose, plugin.EmptyParams())
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()

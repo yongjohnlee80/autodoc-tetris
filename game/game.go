@@ -10,12 +10,13 @@ import (
 	"time"
 )
 
-// The board: Width columns, Height visible rows, and Hidden rows above them where a piece spawns.
+// The board: Width columns, a game's Height visible rows (the guideline's MinHeight at least,
+// taller in a taller window, so the pieces fall further), and Hidden rows above them where a piece
+// spawns.
 const (
-	Width  = 10
-	Height = 20
-	Hidden = 2
-	Rows   = Height + Hidden
+	Width     = 10
+	MinHeight = 20
+	Hidden    = 2
 )
 
 // Kind is a tetromino.
@@ -108,13 +109,15 @@ var kicksI = map[[2]int][5][2]int{
 
 // Game is one game.
 type Game struct {
-	// Board is each cell's kind, 0 for empty; row 0 is the top hidden row.
-	Board [Rows][Width]Kind
-	Cur   Piece
-	Next  Kind
-	Score int
-	Lines int
-	Level int
+	// Board is each cell's kind, 0 for empty; row 0 is the top hidden row, and it has Rows() rows.
+	Board [][Width]Kind
+	// Height is the visible rows: MinHeight or more.
+	Height int
+	Cur    Piece
+	Next   Kind
+	Score  int
+	Lines  int
+	Level  int
 	// Over is the game lost: a piece could not spawn. Paused stops gravity and the keys but pause.
 	Over, Paused bool
 
@@ -122,9 +125,10 @@ type Game struct {
 	bag []Kind
 }
 
-// New is a game, its pieces drawn from seed.
-func New(seed int64) *Game {
-	g := &Game{Level: 1, rng: rand.New(rand.NewSource(seed))}
+// New is a game height rows tall (MinHeight at least), its pieces drawn from seed.
+func New(seed int64, height int) *Game {
+	height = max(height, MinHeight)
+	g := &Game{Level: 1, Height: height, Board: make([][Width]Kind, height+Hidden), rng: rand.New(rand.NewSource(seed))}
 	g.Next = g.draw()
 	g.spawn()
 	return g
@@ -156,7 +160,7 @@ func (g *Game) spawn() {
 func (g *Game) fits(p Piece) bool {
 	for _, c := range p.Cells() {
 		x, y := c[0], c[1]
-		if x < 0 || x >= Width || y < 0 || y >= Rows || g.Board[y][x] != 0 {
+		if x < 0 || x >= Width || y < 0 || y >= len(g.Board) || g.Board[y][x] != 0 {
 			return false
 		}
 	}
@@ -276,7 +280,7 @@ func (g *Game) lock() {
 		g.Board[c[1]][c[0]] = g.Cur.Kind
 	}
 	cleared := 0
-	for y := Rows - 1; y >= 0; y-- {
+	for y := len(g.Board) - 1; y >= 0; y-- {
 		full := true
 		for x := range Width {
 			if g.Board[y][x] == 0 {
@@ -296,6 +300,27 @@ func (g *Game) lock() {
 	g.Lines += cleared
 	g.Level = 1 + g.Lines/10
 	g.spawn()
+}
+
+// Rows is the board's rows, the hidden ones with them.
+func (g *Game) Rows() int { return len(g.Board) }
+
+// Resize makes the visible rows height (MinHeight at least), at the top of the well, so the stack
+// stays where it lies: growing adds empty rows above; shrinking drops rows from the top only while
+// they are empty and the piece is not in them. It says whether the game is now height rows tall.
+func (g *Game) Resize(height int) bool {
+	height = max(height, MinHeight)
+	for g.Height < height {
+		g.Board = append([][Width]Kind{{}}, g.Board...)
+		g.Height++
+		g.Cur.Y++
+	}
+	for g.Height > height && g.Board[0] == ([Width]Kind{}) && g.Cur.Y > 0 {
+		g.Board = g.Board[1:]
+		g.Height--
+		g.Cur.Y--
+	}
+	return g.Height == height
 }
 
 // TogglePause pauses or resumes the game; a game over stays over.

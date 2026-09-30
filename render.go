@@ -15,7 +15,7 @@ const (
 	boardW = game.Width*2 + 2 // the cells and the two walls
 	panelX = left + boardW + 2
 	needW  = panelX + 18
-	needH  = game.Height + 1 // the rows and the floor
+	needH  = game.MinHeight + 1 // the guideline's rows and the floor: a game in a taller window is taller
 )
 
 // pieceColors are each kind's colour, in the themes' vocabulary: the guideline's, where a theme has
@@ -48,73 +48,79 @@ func paletteFor(t plugin.Theme) palette {
 	return p
 }
 
-// render is the game, drawn into a w×h dialog.
+// render is the game, drawn into a w×h dialog. The well is the game's height (wells returns it for
+// a dialog), so in a tall dialog — the manifest asks for 80% of the screen — the pieces fall the
+// whole way down; the panel sits beside its top.
 func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
 	f := plugin.NewFrame(w, h)
 	pal := paletteFor(t)
-	if w < needW || h < needH {
+	if need := g.Height + 1; w < needW || h < need {
 		f.Text(0, 0, "Tetris needs a window", pal.text)
-		f.Text(0, 1, fmt.Sprintf("%d×%d; this one is %d×%d.", needW, needH, w, h), pal.text)
-		f.Text(0, 3, "Esc closes.", pal.text)
+		f.Text(0, 1, fmt.Sprintf("%d×%d; this one is %d×%d.", needW, need, w, h), pal.text)
+		f.Text(0, 3, "The game is paused. Esc hides it.", pal.text)
 		return f
 	}
-	for y := range game.Height {
-		f.Set(left, y, '│', pal.wall)
-		f.Set(left+boardW-1, y, '│', pal.wall)
+	top := (h - g.Height - 1) / 2 // 0 when the well fills the dialog
+	block := func(x, y int, s string, st plugin.Style) { f.Text(left+1+x*2, top+y, s, st) }
+	centre := func(y int, s string, st plugin.Style) {
+		f.Text(left+(boardW-len([]rune(s)))/2, top+y, s, st)
+	}
+	for y := range g.Height {
+		f.Set(left, top+y, '│', pal.wall)
+		f.Set(left+boardW-1, top+y, '│', pal.wall)
 		for x := range game.Width {
 			if k := g.Board[y+game.Hidden][x]; k != 0 {
-				block(f, x, y, "██", pal.piece[k])
+				block(x, y, "██", pal.piece[k])
 			}
 		}
 	}
-	f.Text(left, game.Height, "└"+repeat('─', boardW-2)+"┘", pal.wall)
+	f.Text(left, top+g.Height, "└"+repeat('─', boardW-2)+"┘", pal.wall)
 	if !g.Over {
 		for _, c := range g.Ghost().Cells() {
 			if y := c[1] - game.Hidden; y >= 0 {
-				block(f, c[0], y, "░░", pal.ghost)
+				block(c[0], y, "░░", pal.ghost)
 			}
 		}
 		for _, c := range g.Cur.Cells() {
 			if y := c[1] - game.Hidden; y >= 0 {
-				block(f, c[0], y, "██", pal.piece[g.Cur.Kind])
+				block(c[0], y, "██", pal.piece[g.Cur.Kind])
 			}
 		}
 	}
 
-	f.Text(panelX, 0, "NEXT", pal.title)
+	f.Text(panelX, top, "NEXT", pal.title)
 	next := game.Piece{Kind: g.Next}
 	for _, c := range next.Cells() {
-		f.Text(panelX+c[0]*2, 1+c[1], "██", pal.piece[g.Next])
+		f.Text(panelX+c[0]*2, top+1+c[1], "██", pal.piece[g.Next])
 	}
 	for i, row := range [][2]string{
 		{"SCORE", fmt.Sprint(g.Score)}, {"LEVEL", fmt.Sprint(g.Level)},
 		{"LINES", fmt.Sprint(g.Lines)}, {"BEST", fmt.Sprint(max(best, g.Score))},
 	} {
-		f.Text(panelX, 4+i*2, row[0], pal.title)
-		f.Text(panelX, 5+i*2, row[1], pal.text)
+		f.Text(panelX, top+4+i*2, row[0], pal.title)
+		f.Text(panelX, top+5+i*2, row[1], pal.text)
 	}
 	for i, k := range []string{"←→   move", "↑ x  rotate", "z    rotate back", "↓    soft drop",
-		"Spc  hard drop", "p    pause", "q    quit"} {
-		f.Text(panelX, 13+i, k, pal.wall)
+		"Spc  hard drop", "p q  menu", "Esc  hide"} {
+		f.Text(panelX, top+13+i, k, pal.wall)
 	}
+	// the game's menu: over the board while paused, and when lost
 	switch {
 	case g.Over:
-		centre(f, 8, " GAME OVER ", pal.title)
-		centre(f, 10, " Enter: again ", pal.text)
+		centre(7, " GAME OVER ", pal.title)
+		centre(9, " n  new game ", pal.text)
+		centre(10, " q  quit     ", pal.text)
 	case g.Paused:
-		centre(f, 9, " PAUSED ", pal.title)
+		centre(7, " PAUSED ", pal.title)
+		centre(9, " p  resume   ", pal.text)
+		centre(10, " n  new game ", pal.text)
+		centre(11, " q  quit     ", pal.text)
 	}
 	return f
 }
 
-// block draws board cell (x, y) as two characters.
-func block(f *plugin.Frame, x, y int, s string, st plugin.Style) { f.Text(left+1+x*2, y, s, st) }
-
-// centre writes s centred over the board, on row y.
-func centre(f *plugin.Frame, y int, s string, st plugin.Style) {
-	n := len([]rune(s))
-	f.Text(left+(boardW-n)/2, y, s, st)
-}
+// wells is the well's height for a dialog h rows tall: all of it but the floor.
+func wells(h int) int { return h - 1 }
 
 func repeat(r rune, n int) string {
 	out := make([]rune, n)
