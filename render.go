@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/yongjohnlee80/autodoc/plugin"
 
@@ -51,7 +52,7 @@ func paletteFor(t plugin.Theme) palette {
 // render is the game, drawn into a w×h dialog. The well is the game's height (wells returns it for
 // a dialog), so in a tall dialog — the manifest asks for 80% of the screen — the pieces fall the
 // whole way down; the panel sits beside its top.
-func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
+func render(g *game.Game, w, h int, t plugin.Theme, best int, step int) *plugin.Frame {
 	f := plugin.NewFrame(w, h)
 	pal := paletteFor(t)
 	if need := g.Height + 1; w < needW || h < need {
@@ -65,17 +66,33 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
 	centre := func(y int, s string, st plugin.Style) {
 		f.Text(left+(boardW-len([]rune(s)))/2, top+y, s, st)
 	}
+	clearing := map[int]bool{}
+	for _, y := range g.Clearing {
+		clearing[y-game.Hidden] = true
+	}
 	for y := range g.Height {
 		f.Set(left, top+y, '│', pal.wall)
 		f.Set(left+boardW-1, top+y, '│', pal.wall)
 		for x := range game.Width {
-			if k := g.Board[y+game.Hidden][x]; k != 0 {
+			k := g.Board[y+game.Hidden][x]
+			switch {
+			case k == 0:
+			case clearing[y]:
+				if st, ok := clearLook(step, x, pal.piece[k]); ok {
+					block(x, y, "██", st)
+				}
+			default:
 				block(x, y, "██", pal.piece[k])
 			}
 		}
 	}
 	f.Text(left, top+g.Height, "└"+repeat('─', boardW-2)+"┘", pal.wall)
-	if !g.Over {
+	if g.Clearing != nil {
+		// what the rows make, over the board above them
+		name := [...]string{"", "SINGLE", "DOUBLE", "TRIPLE", "TETRIS"}[min(len(g.Clearing), 4)]
+		above := g.Clearing[len(g.Clearing)-1] - game.Hidden - 2 // the topmost full row, bottom first
+		centre(max(above, 0), fmt.Sprintf(" %s +%d ", name, g.ClearPoints()), pal.title)
+	} else if !g.Over {
 		for _, c := range g.Ghost().Cells() {
 			if y := c[1] - game.Hidden; y >= 0 {
 				block(c[0], y, "░░", pal.ghost)
@@ -117,6 +134,31 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int) *plugin.Frame {
 		centre(11, " q  quit     ", pal.text)
 	}
 	return f
+}
+
+// The clearing animation: clearBlinks steps flashing the full rows (bright white, then their own
+// colours), then clearWipe steps emptying them from the middle outwards, clearStep apart.
+const (
+	clearBlinks = 4
+	clearWipe   = game.Width / 2
+	clearSteps  = clearBlinks + clearWipe
+	clearStep   = 55 * time.Millisecond
+)
+
+// clearLook is a full row's cell x at step of the animation: its look, or false when the wipe has
+// reached it.
+func clearLook(step, x int, own plugin.Style) (plugin.Style, bool) {
+	if step < clearBlinks {
+		if step%2 == 0 {
+			return plugin.Style{FG: "brightwhite", Bold: true}, true
+		}
+		return own, true
+	}
+	gone := step - clearBlinks + 1 // columns gone each side of the middle
+	if x >= game.Width/2-gone && x < game.Width/2+gone {
+		return plugin.Style{}, false
+	}
+	return own, true
 }
 
 // wells is the well's height for a dialog h rows tall: all of it but the floor.

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -63,7 +64,7 @@ func TestTheFrameIsTheBoardThePieceItsGhostAndThePanel(t *testing.T) {
 	g := game.New(7, game.MinHeight)
 	g.Cur = game.Piece{Kind: game.T, X: 3, Y: game.Hidden}
 	g.Score, g.Level, g.Lines = 1234, 3, 21
-	f := render(g, needW, needH, dark, 5000)
+	f := render(g, needW, needH, dark, 5000, 0)
 	s := text(f)
 	for _, want := range []string{"│", "└──", "NEXT", "SCORE", "1234", "LEVEL", "LINES", "21", "BEST", "5000", "Spc  hard drop"} {
 		if !strings.Contains(s, want) {
@@ -97,17 +98,17 @@ func TestMonoDrawsEveryPieceBrightWhite(t *testing.T) {
 // TestASmallWindowSaysWhatItNeeds, and pause and game over say so over the board.
 func TestASmallWindowSaysWhatItNeeds(t *testing.T) {
 	g := game.New(1, game.MinHeight)
-	if s := text(render(g, 30, 10, dark, 0)); !strings.Contains(s, "Tetris needs a window") {
+	if s := text(render(g, 30, 10, dark, 0, 0)); !strings.Contains(s, "Tetris needs a window") {
 		t.Errorf("a small window:\n%s", s)
 	}
 	g.TogglePause()
-	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "PAUSED") ||
+	if s := text(render(g, needW, needH, dark, 0, 0)); !strings.Contains(s, "PAUSED") ||
 		!strings.Contains(s, "p  resume") || !strings.Contains(s, "n  new game") || !strings.Contains(s, "q  quit") {
 		t.Errorf("paused, the game's menu:\n%s", s)
 	}
 	g.TogglePause()
 	g.Over = true
-	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, "GAME OVER") || !strings.Contains(s, "n  new game") {
+	if s := text(render(g, needW, needH, dark, 0, 0)); !strings.Contains(s, "GAME OVER") || !strings.Contains(s, "n  new game") {
 		t.Errorf("over:\n%s", s)
 	}
 }
@@ -118,7 +119,7 @@ func TestASmallWindowSaysWhatItNeeds(t *testing.T) {
 func TestTheWellFillsATallDialog(t *testing.T) {
 	h := needH + 10
 	g := game.New(1, wells(h))
-	rows := strings.Split(text(render(g, needW, h, dark, 0)), "\n")
+	rows := strings.Split(text(render(g, needW, h, dark, 0, 0)), "\n")
 	floor := -1
 	for i, r := range rows {
 		if strings.Contains(r, "└──") {
@@ -128,7 +129,7 @@ func TestTheWellFillsATallDialog(t *testing.T) {
 	if floor != h-1 || !strings.Contains(rows[0], "NEXT") || g.Height != h-1 {
 		t.Fatalf("the floor at row %d (want %d), the well %d rows:\n%s", floor, h-1, g.Height, strings.Join(rows, "\n"))
 	}
-	if s := text(render(g, needW, needH, dark, 0)); !strings.Contains(s, fmt.Sprintf("%d×%d", needW, h)) || !strings.Contains(s, "paused") {
+	if s := text(render(g, needW, needH, dark, 0, 0)); !strings.Contains(s, fmt.Sprintf("%d×%d", needW, h)) || !strings.Contains(s, "paused") {
 		t.Errorf("a %d-row game in a %d-row window:\n%s", g.Height, needH, s)
 	}
 }
@@ -250,5 +251,107 @@ func TestThePluginSpeaksTheProtocol(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(state, "autodoc-tetris", "best")); err != nil || strings.TrimSpace(string(b)) == "0" {
 		t.Errorf("the best score was not kept: %q, %v", b, err)
+	}
+}
+
+// fullRow is a game whose bottom row a vertical I has just filled: it is clearing.
+func fullRow(t *testing.T) *game.Game {
+	t.Helper()
+	g := game.New(1, game.MinHeight)
+	g.Board = make([][game.Width]game.Kind, game.MinHeight+game.Hidden)
+	for x := 1; x < game.Width; x++ {
+		g.Board[g.Rows()-1][x] = game.J
+	}
+	g.Cur = game.Piece{Kind: game.I, Rot: 1, X: -2, Y: 0}
+	g.HardDrop()
+	if len(g.Clearing) != 1 {
+		t.Fatalf("the setup: Clearing %v", g.Clearing)
+	}
+	return g
+}
+
+// TestAClearIsSeenBlinkingThenWipedFromTheMiddle: the full row flashes bright white, then its own
+// colours, then empties from the middle out, under a label of what it makes; the ghost and the
+// next piece wait.
+func TestAClearIsSeenBlinkingThenWipedFromTheMiddle(t *testing.T) {
+	g := fullRow(t)
+	floor := game.MinHeight - 1 // the bottom row, on the frame
+	cell := func(f *plugin.Frame, x int) plugin.Style { return styleAt(f, left+1+x*2, floor) }
+	flash := render(g, needW, needH, dark, 0, 0)
+	if st := cell(flash, 5); st.FG != "brightwhite" || !st.Bold {
+		t.Fatalf("step 0 is not the flash: %+v", st)
+	}
+	if !strings.Contains(text(flash), "SINGLE +100") || strings.Contains(text(flash), "░░") {
+		t.Fatalf("the label, and no ghost while clearing:\n%s", text(flash))
+	}
+	if st := cell(render(g, needW, needH, dark, 0, 1), 5); st.FG != "blue" {
+		t.Fatalf("step 1 is not the row's own colour: %+v", st)
+	}
+	wipe := render(g, needW, needH, dark, 0, clearBlinks) // the first wipe step: the middle two gone
+	row := strings.Split(text(wipe), "\n")[floor]
+	if got := []rune(row)[left+1+4*2]; got != ' ' {
+		t.Fatalf("the middle is not wiped first: %q", row)
+	}
+	if got := []rune(row)[left+1]; got != '█' {
+		t.Fatalf("the edge went before the middle: %q", row)
+	}
+	last := strings.Split(text(render(g, needW, needH, dark, 0, clearSteps-1)), "\n")[floor]
+	if strings.Count(last, "█") != 0 {
+		t.Fatalf("the last step leaves blocks: %q", last)
+	}
+}
+
+// TestTheAnimationPlaysThenTheRowsGo: a lock that fills a row plays the animation, a frame each
+// step, then takes the row away and the game plays on; Close stops it.
+func TestTheAnimationPlaysThenTheRowsGo(t *testing.T) {
+	var mu sync.Mutex
+	var frames []string
+	tt := &tetris{g: fullRow(t), w: needW, h: needH, theme: dark, stop: make(chan struct{})}
+	tt.send = func(f *plugin.Frame) error {
+		mu.Lock()
+		frames = append(frames, text(f))
+		mu.Unlock()
+		return nil
+	}
+	tt.mu.Lock()
+	tt.drawLocked()
+	tt.mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		tt.mu.Lock()
+		done := tt.g.Clearing == nil
+		tt.mu.Unlock()
+		if done {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the rows never went")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	n := len(frames)
+	mu.Unlock()
+	if n != clearSteps+1 || tt.g.Lines != 1 || tt.animating {
+		t.Fatalf("%d frames (want %d), lines %d, animating %v", n, clearSteps+1, tt.g.Lines, tt.animating)
+	}
+	tt.mu.Lock()
+	moved := tt.g.Move(1)
+	tt.mu.Unlock()
+	if !moved {
+		t.Fatal("the game does not play on after the clear")
+	}
+
+	stopped := &tetris{g: fullRow(t), w: needW, h: needH, theme: dark, stop: make(chan struct{})}
+	stopped.send = func(*plugin.Frame) error { return nil }
+	stopped.mu.Lock()
+	stopped.drawLocked()
+	stopped.mu.Unlock()
+	close(stopped.stop)
+	time.Sleep(3 * clearStep)
+	stopped.mu.Lock()
+	defer stopped.mu.Unlock()
+	if stopped.g.Clearing == nil {
+		t.Fatal("the animation ran on after Close")
 	}
 }
