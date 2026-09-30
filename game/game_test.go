@@ -144,6 +144,10 @@ func TestLinesClearAndScoreByTheGuideline(t *testing.T) {
 	g.Board[g.Rows()-5][5] = S // above the four rows: falls four
 	g.Cur = Piece{Kind: I, Rot: 1, X: -2, Y: 0}
 	n := g.HardDrop()
+	if len(g.Clearing) != 4 || g.Lines != 0 {
+		t.Fatalf("the four full rows are not waiting to clear: %v, lines %d", g.Clearing, g.Lines)
+	}
+	g.FinishClear()
 	if g.Lines != 4 || g.Score != 800+2*n {
 		t.Fatalf("a tetris: %d lines, score %d, want 4 and %d", g.Lines, g.Score, 800+2*n)
 	}
@@ -165,6 +169,7 @@ func TestLinesClearAndScoreByTheGuideline(t *testing.T) {
 	}
 	g.Cur = Piece{Kind: I, X: 0, Y: 0}
 	fell := g.HardDrop()
+	g.FinishClear()
 	if g.Lines != 10 || g.Level != 2 || g.Score != 100+2*fell { // scored at the level it was cleared at
 		t.Fatalf("the tenth line: lines %d level %d score %d", g.Lines, g.Level, g.Score)
 	}
@@ -300,5 +305,52 @@ func TestResizeKeepsTheStackWhereItLies(t *testing.T) {
 	}
 	if g.Resize(MinHeight) || g.Height != 22 {
 		t.Fatalf("a shrink through the stack: height %d", g.Height)
+	}
+}
+
+// TestAClearWaitsToBeSeen: the full rows a lock makes stay on the board, marked Clearing, and the
+// game waits — no move, drop or tick, no next piece — until FinishClear takes them away, scores
+// them and spawns; a resize keeps them marked; a lock that fills no row spawns at once.
+func TestAClearWaitsToBeSeen(t *testing.T) {
+	g := New(1, MinHeight)
+	g.Board = make([][Width]Kind, MinHeight+Hidden)
+	for x := 1; x < Width; x++ {
+		g.Board[g.Rows()-1][x] = J
+	}
+	g.Cur = Piece{Kind: I, Rot: 1, X: -2, Y: 0}
+	g.HardDrop()
+	bottom := g.Rows() - 1
+	if len(g.Clearing) != 1 || g.Clearing[0] != bottom || g.Board[bottom][0] != I {
+		t.Fatalf("the full row, still on the board: Clearing %v, row %v", g.Clearing, g.Board[bottom])
+	}
+	cur, score := g.Cur, g.Score
+	g.Move(1)
+	g.Tick()
+	g.SoftDrop()
+	if g.HardDrop() != 0 || g.Cur != cur || g.Score != score {
+		t.Fatal("the game played while a row was clearing")
+	}
+	g.Resize(MinHeight + 3)
+	if g.Clearing[0] != g.Rows()-1 {
+		t.Fatalf("a resize lost the clearing row: %v of %d", g.Clearing, g.Rows())
+	}
+	g.FinishClear()
+	// the I's three cells above the full row fall into it; the J's are gone
+	if g.Clearing != nil || g.Lines != 1 || g.Board[g.Rows()-1] != ([Width]Kind{I}) || g.Score != score+100 {
+		t.Fatalf("after the clear: %v, lines %d, score %d, bottom %v", g.Clearing, g.Lines, g.Score, g.Board[g.Rows()-1])
+	}
+	if !g.Move(1) {
+		t.Fatal("the next piece does not play")
+	}
+	g.FinishClear() // nothing clearing: nothing happens
+	if g.Lines != 1 {
+		t.Fatal("a FinishClear with nothing clearing cleared")
+	}
+	o := New(1, MinHeight)
+	o.Board = make([][Width]Kind, MinHeight+Hidden)
+	o.Cur = Piece{Kind: O, X: 3}
+	o.HardDrop()
+	if o.Clearing != nil || o.Cur.Y != 0 {
+		t.Fatalf("a lock that fills no row: Clearing %v, next at %d", o.Clearing, o.Cur.Y)
 	}
 }

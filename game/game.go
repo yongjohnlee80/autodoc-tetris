@@ -120,6 +120,10 @@ type Game struct {
 	Level  int
 	// Over is the game lost: a piece could not spawn. Paused stops gravity and the keys but pause.
 	Over, Paused bool
+	// Clearing are the full rows a lock left, board rows, bottom first: they stay on the board, the
+	// game waiting, until FinishClear takes them away — the time a player sees them go. Nil when
+	// none are.
+	Clearing []int
 
 	rng *rand.Rand
 	bag []Kind
@@ -167,7 +171,7 @@ func (g *Game) fits(p Piece) bool {
 	return true
 }
 
-func (g *Game) playing() bool { return !g.Over && !g.Paused }
+func (g *Game) playing() bool { return !g.Over && !g.Paused && g.Clearing == nil }
 
 // Move shifts the piece dx columns, when it fits.
 func (g *Game) Move(dx int) bool {
@@ -274,12 +278,12 @@ func (g *Game) Ghost() Piece {
 // lineScores are the guideline's points for 1 to 4 lines at once, times the level.
 var lineScores = [5]int{0, 100, 300, 500, 800}
 
-// lock writes the piece into the board, clears the full rows, scores them, and spawns the next.
+// lock writes the piece into the board. Full rows it made are Clearing, and the game waits for
+// FinishClear; with none, the next piece spawns.
 func (g *Game) lock() {
 	for _, c := range g.Cur.Cells() {
 		g.Board[c[1]][c[0]] = g.Cur.Kind
 	}
-	cleared := 0
 	for y := len(g.Board) - 1; y >= 0; y-- {
 		full := true
 		for x := range Width {
@@ -288,15 +292,39 @@ func (g *Game) lock() {
 				break
 			}
 		}
-		if !full {
-			continue
+		if full {
+			g.Clearing = append(g.Clearing, y)
 		}
-		cleared++
-		copy(g.Board[1:y+1], g.Board[0:y])
-		g.Board[0] = [Width]Kind{}
-		y++ // the row that moved into y is looked at again
 	}
-	g.Score += lineScores[cleared] * g.Level
+	if g.Clearing == nil {
+		g.spawn()
+	}
+}
+
+// ClearPoints are what the Clearing rows score when FinishClear takes them: the guideline's for
+// their count, times the level they were made at.
+func (g *Game) ClearPoints() int { return lineScores[min(len(g.Clearing), 4)] * g.Level }
+
+// FinishClear takes the Clearing rows away — what is above them falls — scores them, and spawns
+// the next piece. Without Clearing rows it does nothing.
+func (g *Game) FinishClear() {
+	if g.Clearing == nil {
+		return
+	}
+	full := map[int]bool{}
+	for _, y := range g.Clearing {
+		full[y] = true
+	}
+	kept := make([][Width]Kind, 0, len(g.Board))
+	for y, row := range g.Board {
+		if !full[y] {
+			kept = append(kept, row)
+		}
+	}
+	cleared := len(g.Board) - len(kept)
+	g.Board = append(make([][Width]Kind, cleared), kept...)
+	g.Clearing = nil
+	g.Score += lineScores[min(cleared, 4)] * g.Level // ClearPoints, before the level moves
 	g.Lines += cleared
 	g.Level = 1 + g.Lines/10
 	g.spawn()
@@ -310,15 +338,20 @@ func (g *Game) Rows() int { return len(g.Board) }
 // they are empty and the piece is not in them. It says whether the game is now height rows tall.
 func (g *Game) Resize(height int) bool {
 	height = max(height, MinHeight)
+	shift := func(d int) {
+		g.Height += d
+		g.Cur.Y += d
+		for i := range g.Clearing {
+			g.Clearing[i] += d
+		}
+	}
 	for g.Height < height {
 		g.Board = append([][Width]Kind{{}}, g.Board...)
-		g.Height++
-		g.Cur.Y++
+		shift(1)
 	}
 	for g.Height > height && g.Board[0] == ([Width]Kind{}) && g.Cur.Y > 0 {
 		g.Board = g.Board[1:]
-		g.Height--
-		g.Cur.Y--
+		shift(-1)
 	}
 	return g.Height == height
 }

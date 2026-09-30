@@ -6,7 +6,8 @@ drawn through AutoDoc's plugin SDK. It plays by the guideline:
 - Super Rotation System turns with wall kicks;
 - gravity that quickens every ten lines;
 - scoring of 100, 300, 500 and 800 times the level for one to four lines, plus 1 a row for a soft drop and 2 a row for a hard drop;
-- a ghost piece, the next piece, pause, and a best score kept between games.
+- a ghost piece, the next piece, pause, and a best score kept between games;
+- full rows that blink, then wipe from the middle out, under what they make ("TETRIS +800"), before they go.
 
 One thing is not the guideline's: the well is as tall as the dialog, up to 40 rows, so the pieces
 fall further than 20. On a shorter screen the dialog fits it, and the well shrinks with it, down

@@ -29,19 +29,23 @@ func main() {
 type tetris struct {
 	mu    sync.Mutex
 	peer  *plugin.Peer
+	send  func(*plugin.Frame) error // the peer's Frame; a test's recorder
 	g     *game.Game
 	w, h  int
 	theme plugin.Theme
 	best  int
 	stop  chan struct{}
 	done  chan struct{}
+	// the clearing animation: its step, and whether it runs
+	step      int
+	animating bool
 }
 
 func newTetris() *tetris { return &tetris{best: loadBest()} }
 
 func (t *tetris) Open(p *plugin.Peer, o plugin.Open) {
 	t.mu.Lock()
-	t.peer, t.w, t.h, t.theme = p, o.Width, o.Height, o.Theme
+	t.peer, t.send, t.w, t.h, t.theme = p, p.Frame, o.Width, o.Height, o.Theme
 	t.g = game.New(time.Now().UnixNano(), wells(o.Height))
 	t.stop, t.done = make(chan struct{}), make(chan struct{})
 	t.drawLocked()
@@ -130,7 +134,38 @@ func (t *tetris) Close() {
 }
 
 func (t *tetris) drawLocked() {
-	_ = t.peer.Frame(render(t.g, t.w, t.h, t.theme, t.best))
+	_ = t.send(render(t.g, t.w, t.h, t.theme, t.best, t.step))
+	if t.g.Clearing != nil && !t.animating {
+		t.animating = true
+		go t.animate(t.g)
+	}
+}
+
+// animate plays the clearing of g's full rows, a frame each clearStep, then takes them away: the
+// time to see them go (Johno: "clearing the block instantly makes it not rewarding"). It ends early
+// on Close, and a new game begun meanwhile is left alone.
+func (t *tetris) animate(g *game.Game) {
+	for step := 1; step <= clearSteps; step++ {
+		select {
+		case <-t.stop:
+			return
+		case <-time.After(clearStep):
+		}
+		t.mu.Lock()
+		if t.g != g {
+			t.animating, t.step = false, 0
+			t.mu.Unlock()
+			return
+		}
+		if step < clearSteps {
+			t.step = step
+		} else {
+			g.FinishClear()
+			t.animating, t.step = false, 0
+		}
+		t.drawLocked()
+		t.mu.Unlock()
+	}
 }
 
 // keepBest saves the game's score when it beats the best.
