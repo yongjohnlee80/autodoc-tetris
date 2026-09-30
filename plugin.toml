@@ -9,7 +9,8 @@ command  = ["./bin/autodoc-tetris"]
 
 [dialog]
 width      = 44
-height     = "80%"              # of the screen's height: the well is as tall, so the pieces fall further
+height     = 41                 # a 40-row well and its floor; on a shorter screen the dialog fits
+                                # it, the well down to 20 rows (below that it asks for more)
 placements = ["right", "left"]  # designed for either side: right first; Manage plugins › Place
 esc        = "hide"             # Esc hides it and the game pauses; its own menu quits (q)
 

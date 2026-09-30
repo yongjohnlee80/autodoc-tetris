@@ -8,8 +8,9 @@ drawn through AutoDoc's plugin SDK. It plays by the guideline:
 - scoring of 100, 300, 500 and 800 times the level for one to four lines, plus 1 a row for a soft drop and 2 a row for a hard drop;
 - a ghost piece, the next piece, pause, and a best score kept between games.
 
-One thing is not the guideline's: the well is as tall as the dialog, which takes 80% of the
-screen's height, so the pieces fall further than 20 rows. It is never shorter than 20.
+One thing is not the guideline's: the well is as tall as the dialog, up to 40 rows, so the pieces
+fall further than 20. On a shorter screen the dialog fits it, and the well shrinks with it, down
+to 20.
 
 It is also the example of an AutoDoc plugin: a separate program, in its own repository, that AutoDoc
 installs from a git URL and runs in a dialog.
@@ -54,7 +55,8 @@ in the plugin's directory, since that is a git clone an update resets.
 ## How it is made
 
 - `plugin.toml` is the manifest AutoDoc reads. It declares a dialog plugin of plugin protocol 1:
-  - its size, 44 columns and 80% of the screen's height, the well as tall as the dialog;
+  - its size, 44 columns and 41 rows (a 40-row well and its floor), fitted to a shorter screen
+    down to a 20-row well;
   - its placements, right then left (**Plugins › Manage plugins… › Place** switches them);
   - `esc = "hide"`, so Esc hides it and it pauses, and its own menu quits;
   - the `command` it starts, and the `[install] build` that adding it runs.
