@@ -42,7 +42,7 @@ func newTetris() *tetris { return &tetris{best: loadBest()} }
 func (t *tetris) Open(p *plugin.Peer, o plugin.Open) {
 	t.mu.Lock()
 	t.peer, t.w, t.h, t.theme = p, o.Width, o.Height, o.Theme
-	t.g = game.New(time.Now().UnixNano())
+	t.g = game.New(time.Now().UnixNano(), wells(o.Height))
 	t.stop, t.done = make(chan struct{}), make(chan struct{})
 	t.drawLocked()
 	t.mu.Unlock()
@@ -78,7 +78,7 @@ func (t *tetris) Key(k plugin.Key) {
 		_ = t.peer.Close()
 	case restart:
 		t.keepBest()
-		t.g = game.New(time.Now().UnixNano())
+		t.g = game.New(time.Now().UnixNano(), wells(t.h))
 		t.drawLocked()
 	case changed:
 		t.drawLocked()
@@ -89,6 +89,10 @@ func (t *tetris) Resize(w, h int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.w, t.h = w, h
+	// the well follows the window; one too short for the stack pauses, and says so (render)
+	if !t.g.Resize(wells(h)) && !t.g.Over && !t.g.Paused {
+		t.g.TogglePause()
+	}
 	t.drawLocked()
 }
 
@@ -96,6 +100,24 @@ func (t *tetris) Theme(th plugin.Theme) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.theme = th
+	t.drawLocked()
+}
+
+// Hide is Esc: AutoDoc hid the dialog (its manifest says esc = "hide"). A game in play pauses, and
+// the menu is what shows when it comes back.
+func (t *tetris) Hide() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.g.Over && !t.g.Paused {
+		t.g.TogglePause()
+		t.drawLocked()
+	}
+}
+
+// Show is the dialog back: the game stays paused, its menu up, until p.
+func (t *tetris) Show() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.drawLocked()
 }
 

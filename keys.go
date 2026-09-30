@@ -17,18 +17,34 @@ const (
 )
 
 // apply plays key k on g. The arrows, and Vim's h j k l, move; up, x and k turn clockwise, z
-// anticlockwise; Space drops; p pauses; q quits; Enter starts a lost game again.
+// anticlockwise; Space drops. p, or q, pauses and opens the game's menu; in the menu p resumes, n
+// starts a new game and q quits, and a lost game's menu is the same with Enter for a new one. Esc
+// is AutoDoc's: it hides the dialog, and the game pauses (tetris.Hide).
 func apply(g *game.Game, k plugin.Key) action {
-	switch k.Key {
-	case "q", "Q":
-		return quit
-	case "Enter":
-		if g.Over {
+	switch {
+	case g.Over:
+		switch k.Key {
+		case "Enter", "n", "N":
 			return restart
+		case "q", "Q":
+			return quit
 		}
 		return nothing
-	case "p", "P":
-		g.TogglePause()
+	case g.Paused:
+		switch k.Key {
+		case "p", "P":
+			g.TogglePause()
+			return changed
+		case "n", "N":
+			return restart
+		case "q", "Q":
+			return quit
+		}
+		return nothing
+	}
+	switch k.Key {
+	case "p", "P", "q", "Q":
+		g.TogglePause() // the menu, not the end: quitting is the menu's
 		return changed
 	}
 	before := *g
@@ -48,7 +64,8 @@ func apply(g *game.Game, k plugin.Key) action {
 	default:
 		return nothing
 	}
-	if g.Cur == before.Cur && g.Score == before.Score && g.Board == before.Board {
+	// a lock spawns the next piece, so a changed board is a changed Cur
+	if g.Cur == before.Cur && g.Score == before.Score {
 		return nothing
 	}
 	return changed
