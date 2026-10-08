@@ -26,7 +26,7 @@ https://github.com/yongjohnlee80/autodoc-tetris
 
 AutoDoc clones it, then asks before anything runs. It shows the build (`go build …`) and the
 command it would start. It is at your own risk, as every plugin is: a plugin runs as you. On
-**Yes, at my own risk**, it builds the plugin and lists **Plugins › Tetris**.
+**Yes, at my own risk**, it builds the plugin and lists **Plugins › AutoTetris**.
 
 It needs git and Go 1.25 or newer, since the build is `go build`. **Plugins › Manage plugins…**
 updates it or removes it.
@@ -48,7 +48,7 @@ cd ~/.config/autodoc/plugins/tetris && go build -o bin/autodoc-tetris .
 | ↓ (or j) | soft drop |
 | Space | hard drop |
 | p, or q | pause: the game's menu, where p resumes, n starts a new game, and q quits |
-| Esc | hide it: the game pauses, and Plugins › Tetris brings it back |
+| Esc | hide it: the game pauses, and Plugins › AutoTetris brings it back |
 
 The best score is kept in `$XDG_STATE_HOME/autodoc-tetris/best` (`~/.local/state/…`). It is not kept
 in the plugin's directory, since that is a git clone an update resets.
