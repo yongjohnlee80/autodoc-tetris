@@ -1,8 +1,8 @@
-# Tetris, as an AutoDoc plugin. AutoDoc's Plugins › Add from a git URL… clones this repository,
+# AutoTetris: Tetris, as an AutoDoc plugin. AutoDoc's Plugins › Add from a git URL… clones this repository,
 # asks before it runs anything, then runs [install] build here and starts `command` from this
 # directory.
 name     = "tetris"
-title    = "Tetris"
+title    = "AutoTetris"
 kind     = "dialog"
 protocol = 1
 command  = ["./bin/autodoc-tetris"]

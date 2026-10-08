@@ -56,13 +56,13 @@ func scoreOf(frame string) int {
 
 var dark = plugin.Theme{Name: "dark", Colors: map[string]string{"document.lineNumber": "#5f5f5f", "document.cursor": "#ffaf00"}}
 
-// TestTheGameIsCalebAndEliasTetris: the title, 갈렙과 엘리아 테트리스, at the top of the panel, in
-// the theme's accent, bold, above the next piece and the scores.
-func TestTheGameIsCalebAndEliasTetris(t *testing.T) {
+// TestTheTitleTopsThePanel: the title, AutoTetris, at the top of the panel, in the theme's accent,
+// bold, above the next piece and the scores.
+func TestTheTitleTopsThePanel(t *testing.T) {
 	g := game.New(1, game.MinHeight)
 	f := render(g, needW, needH, dark, 0, 0)
 	rows := strings.Split(text(f), "\n")
-	if !strings.Contains(rows[0], "갈렙과 엘리아") || !strings.Contains(rows[1], "테트리스") {
+	if !strings.Contains(rows[0], "AutoTetris") {
 		t.Fatalf("the title is not at the top of the panel:\n%s", text(f))
 	}
 	if st := styleAt(f, panelX, 0); st.FG != "#ffaf00" || !st.Bold {
@@ -122,7 +122,7 @@ func TestMonoDrawsEveryPieceBrightWhite(t *testing.T) {
 // TestASmallWindowSaysWhatItNeeds, and pause and game over say so over the board.
 func TestASmallWindowSaysWhatItNeeds(t *testing.T) {
 	g := game.New(1, game.MinHeight)
-	if s := text(render(g, 30, 10, dark, 0, 0)); !strings.Contains(s, "Tetris needs a window") {
+	if s := text(render(g, 30, 10, dark, 0, 0)); !strings.Contains(s, "AutoTetris needs a window") {
 		t.Errorf("a small window:\n%s", s)
 	}
 	g.TogglePause()
