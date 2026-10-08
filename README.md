@@ -1,9 +1,6 @@
-# autodoc-tetris
+# AutoTetris (autodoc-tetris)
 
-**갈렙과 엘리아 테트리스**: Caleb and Elia's Tetris, made for Johno's son and daughter. Their names
-top the score panel.
-
-Tetris, as an [AutoDoc](https://github.com/yongjohnlee80/autodoc) plugin: a dialog over the page,
+**AutoTetris**: Tetris, as an [AutoDoc](https://github.com/yongjohnlee80/autodoc) plugin: a dialog over the page,
 drawn through AutoDoc's plugin SDK. It plays by the guideline:
 - a 7-bag of the seven tetrominoes;
 - Super Rotation System turns with wall kicks;

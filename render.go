@@ -37,9 +37,8 @@ type palette struct {
 	name  plugin.Style // the title: the theme's accent (its cursor's colour), bold
 }
 
-// titleLines are the game's title: it is 갈렙 and 엘리아's (Johno's son and daughter), "Caleb and
-// Elia's Tetris".
-var titleLines = []string{"갈렙과 엘리아", "테트리스"}
+// titleLines are the game's title, at the top of the score panel.
+var titleLines = []string{"AutoTetris"}
 
 func paletteFor(t plugin.Theme) palette {
 	dim := t.Colors["document.lineNumber"]
@@ -61,7 +60,7 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int, step int) *plugin.
 	f := plugin.NewFrame(w, h)
 	pal := paletteFor(t)
 	if need := g.Height + 1; w < needW || h < need {
-		f.Text(0, 0, "Tetris needs a window", pal.text)
+		f.Text(0, 0, "AutoTetris needs a window", pal.text)
 		f.Text(0, 1, fmt.Sprintf("%d×%d; this one is %d×%d.", needW, need, w, h), pal.text)
 		f.Text(0, 3, "The game is paused. Esc hides it.", pal.text)
 		return f
@@ -110,9 +109,7 @@ func render(g *game.Game, w, h int, t plugin.Theme, best int, step int) *plugin.
 		}
 	}
 
-	// whose game it is, at the top of the panel: Hangul is two columns a letter, so the title takes
-	// two lines of the panel's 19 (the frame holds a letter in one cell, and the host draws it two
-	// wide; at the row's end that pushes only its blanks)
+	// the title, at the top of the panel
 	for i, line := range titleLines {
 		f.Text(panelX, top+i, line, pal.name)
 	}
