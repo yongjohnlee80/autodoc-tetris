@@ -1,6 +1,6 @@
 module github.com/yongjohnlee80/autodoc-tetris
 
-go 1.25.3
+go 1.26.9
 
 require github.com/yongjohnlee80/autodoc v0.1.2
 
