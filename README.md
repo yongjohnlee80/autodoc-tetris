@@ -28,7 +28,7 @@ AutoDoc clones it, then asks before anything runs. It shows the build (`go build
 command it would start. It is at your own risk, as every plugin is: a plugin runs as you. On
 **Yes, at my own risk**, it builds the plugin and lists **Plugins › AutoTetris**.
 
-It needs git and Go 1.25 or newer, since the build is `go build`. **Plugins › Manage plugins…**
+It needs git and Go 1.26 or newer, since the build is `go build`. **Plugins › Manage plugins…**
 updates it or removes it.
 
 By hand, the same thing:
